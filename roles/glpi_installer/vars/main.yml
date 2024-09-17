@@ -1,0 +1,40 @@
+---
+packages:
+- apache2
+- php
+- php-apcu
+- php-cli
+- php-common
+- php-curl
+- php-gd
+- php-imap
+- php-ldap
+- php-mysql
+- php-xmlrpc
+- php-xml
+- php-mbstring
+- php-bcmath
+- php-intl
+- php-zip
+- php-redis
+- php-bz2
+- libapache2-mod-php
+- php-soap
+- php-cas
+- mariadb-server
+- python3-pymysql
+- python3-pexpect
+
+php_settings:
+  upload_max_filesize: 20M
+  post_max_size: 20M
+  max_exea<<Acution_time: 60
+  max_input_vars: 5000
+  memory_limit: 256M
+  session_cookie_httponly: On
+  date_timezone: America/Sao_Paulo
+
+create:
+- /etc/glpi
+- /var/lib/glpi
+- /var/log/glpi

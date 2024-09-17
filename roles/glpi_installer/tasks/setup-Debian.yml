@@ -1,0 +1,187 @@
+- name: Secure MySQL installation
+  become: false
+  ansible.builtin.expect:
+    command: mysql_secure_installation
+    responses:
+      'Enter current password for root (enter for none):': ''
+      'Switch to unix_socket authentication [Y/n]': 'N'
+      'Change the root password? [Y/n]': 'Y'
+      'New password:': '{{ mysql_root_password }}'
+      'Re-enter new password:': '{{ mysql_root_password }}'
+      'Remove anonymous users? [Y/n]': 'Y'
+      'Disallow root login remotely? [Y/n]': 'Y'
+      'Remove test database and access to it? [Y/n]': 'Y'
+      'Reload privilege tables now? [Y/n]': 'Y'
+  register: mysql_secure_installation
+  failed_when: "'ERROR' in mysql_secure_installation.stdout"
+
+- name: Create .my.cnf
+  ansible.builtin.copy:
+    content: |
+      [client]
+      user=root
+      password=ansible
+    dest: /root/.my.cnf
+    mode: '0600'
+
+- name: Read timezone
+  ansible.builtin.shell: "mysql_tzinfo_to_sql /usr/share/zoneinfo | mysql mysql"
+
+- name: Create user
+  community.mysql.mysql_user:
+    name: "glpi"
+    password: "glpi"
+    login_host: "localhost"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    login_user: root
+    login_password: ansible
+    priv: "glpi.*:ALL"
+    host: "localhost"
+    state: present
+
+- name: Create database
+  community.mysql.mysql_db:
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    name: "glpi"
+    state: present
+
+- name: Download GLPI
+  ansible.builtin.get_url:
+    url: "https://github.com/glpi-project/glpi/releases/download/10.0.15/glpi-10.0.15.tgz"
+    dest: "/var/www/html"
+    mode: '0644'
+
+- name: Extract GLPI
+  ansible.builtin.unarchive:
+    src: "/var/www/html/glpi-10.0.15.tgz"
+    dest: "/var/www/html"
+    remote_src: true
+
+- name: Create necessary directories
+  ansible.builtin.file:
+    state: directory
+    path: "{{ item }}"
+    mode: '0755'
+    owner: www-data
+    group: www-data
+  loop: "{{ create }}"
+
+- name: Configure GLPI
+  ansible.builtin.template:
+    src: downstream.php.j2
+    dest: /var/www/html/glpi/downstream.php
+    mode: '0644'
+
+- name: Create '/local_define.php'
+  ansible.builtin.file:
+    state: touch
+    path: /etc/glpi/local_define.php
+    mode: "0644"
+
+- name: Configure file
+  ansible.builtin.template:
+    src: local_define.php.j2
+    dest: /etc/glpi/local_define.php
+    mode: '0644'
+    owner: www-data
+    group: www-data
+
+- name: Set permissions for /var/www/html/glpi
+  ansible.builtin.find:
+    paths: /var/www/html/glpi
+  register: glpi_files
+
+- name: Set file permissions for /var/www/html/glpi
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ '0644' if item.isreg else '0755' }}"
+  loop: "{{ glpi_files.files }}"
+  when: glpi_files.matched > 0
+
+- name: Set permissions for /etc/glpi
+  ansible.builtin.find:
+    paths: /etc/glpi
+  register: etc_glpi_files
+
+- name: Set file permissions for /etc/glpi
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: www-data
+    group: www-data
+    mode: "{{ '0644' if item.isreg else '0755' }}"
+  loop: "{{ etc_glpi_files.files }}"
+  when: etc_glpi_files.matched > 0
+
+- name: Set permissions for /var/lib/glpi
+  ansible.builtin.find:
+    paths: /var/lib/glpi
+  register: var_lib_glpi_files
+
+- name: Set file permissions for /var/lib/glpi
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: www-data
+    group: www-data
+    mode: "{{ '0644' if item.isreg else '0755' }}"
+  loop: "{{ var_lib_glpi_files.files }}"
+  when: var_lib_glpi_files.matched > 0
+
+- name: Set permissions for /var/log/glpi
+  ansible.builtin.find:
+    paths: /var/log/glpi
+  register: var_log_glpi_files
+
+- name: Set file permissions for /var/log/glpi
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: www-data
+    group: www-data
+    mode: "{{ '0644' if item.isreg else '0755' }}"
+  loop: "{{ var_log_glpi_files.files }}"
+  when: var_log_glpi_files.matched > 0
+
+- name: Set permissions for /var/www/html/glpi/marketplace
+  ansible.builtin.find:
+    paths: /var/www/html/glpi/marketplace
+  register: marketplace_files
+
+- name: Set file permissions for /var/www/html/glpi/marketplace
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: www-data
+    group: www-data
+    mode: "{{ '0644' if item.isreg else '0755' }}"
+  loop: "{{ marketplace_files.files }}"
+
+- name: VirtualHost dedicated to GLPI
+  ansible.builtin.template:
+    src: glpi.conf.j2
+    dest: /etc/apache2/sites-available/glpi.conf
+
+- name: Enable rewrite module and GLPI site
+  ansible.builtin.shell: "a2dissite 000-default && a2enmod rewrite && a2ensite glpi"
+  notify: restart apache2
+
+- name: Configure PHP settings
+  ansible.builtin.lineinfile:
+    path: "/etc/php/8.2/apache2/php.ini"
+    regexp: "^({{ item.key }})\\s*=.*$"
+    line: "{{ item.key }} = {{ item.value }}"
+  loop: "{{ php_settings | dict2items }}"
+  notify: restart apache2
+
+- name: Ensure session.cookie_httponly is set to 'on'
+  ansible.builtin.lineinfile:
+    path: /etc/php/8.2/apache2/php.ini
+    regexp: '^session.cookie_httponly\s*='
+    line: session.cookie_httponly = on
+
+- name: Set Permission for /var/www/html/glpi
+  ansible.builtin.file:
+    path: /var/www/html/glpi/
+    owner: www-data
+    group: www-data
+    mode: '0777'
+    recurse: yes

@@ -1,0 +1,9 @@
+---
+- name: "Install glpi"
+  hosts: container
+  become: true
+  vars_files:
+    - passwords.yml
+  roles:
+  - glpi_installer
+
