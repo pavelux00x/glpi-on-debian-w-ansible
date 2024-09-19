@@ -1,0 +1,5 @@
+{
+    "yaml.schemas": {
+        "https://raw.githubusercontent.com/ansible/ansible-lint/main/src/ansiblelint/schemas/ansible.json#/$defs/playbook": "file:///Users/pavelfilingeri/Desktop/Certifications/RH294/project/roles/glpi_installer/tasks/setup-Debian.yml"
+    }
+}

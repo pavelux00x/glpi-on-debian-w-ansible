@@ -1,40 +1,74 @@
-- name: Secure MySQL installation
-  become: false
-  ansible.builtin.expect:
-    command: mysql_secure_installation
-    responses:
-      'Enter current password for root (enter for none):': ''
-      'Switch to unix_socket authentication [Y/n]': 'N'
-      'Change the root password? [Y/n]': 'Y'
-      'New password:': '{{ mysql_root_password }}'
-      'Re-enter new password:': '{{ mysql_root_password }}'
-      'Remove anonymous users? [Y/n]': 'Y'
-      'Disallow root login remotely? [Y/n]': 'Y'
-      'Remove test database and access to it? [Y/n]': 'Y'
-      'Reload privilege tables now? [Y/n]': 'Y'
-  register: mysql_secure_installation
-  failed_when: "'ERROR' in mysql_secure_installation.stdout"
+
+
+- name: Wait for MySQL socket to be available
+  wait_for:
+    path: /var/run/mysqld/mysqld.sock
+    state: started
+    delay: 2
+- name: Debug var_lib_glpi_files
+  debug:
+    var: "{{ mysql_root_password }}"
 
 - name: Create .my.cnf
   ansible.builtin.copy:
     content: |
       [client]
       user=root
-      password=ansible
+      password={{ mysql_root_password }}
     dest: /root/.my.cnf
     mode: '0600'
+  retries: 3
+  delay: 1
+
+- name: Set MariaDB root password
+  community.mysql.mysql_user:
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    name: root
+    password: "{{ mysql_root_password }}"
+    host: localhost
+    state: present
+
+- name: Remove anonymous users
+  community.mysql.mysql_user:
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    name: ''
+    host_all: true
+    state: absent
+
+
+- name: Remove test database
+  community.mysql.mysql_db:
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    name: test
+    state: absent
+
+- name: Disallow root login remotely
+  community.mysql.mysql_user:
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    name: root
+    host: localhost
+    state: present
+    password: "{{ mysql_root_password }}"
+
+
+- name: Reload privilege tables
+  community.mysql.mysql_query:
+    query: "FLUSH PRIVILEGES;"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+
 
 - name: Read timezone
   ansible.builtin.shell: "mysql_tzinfo_to_sql /usr/share/zoneinfo | mysql mysql"
 
-- name: Create user
+- name: Create GLPI user
   community.mysql.mysql_user:
-    name: "glpi"
-    password: "glpi"
+    name: "glpi_user"
+    password: "P@ssword123"
     login_host: "localhost"
     login_unix_socket: /var/run/mysqld/mysqld.sock
     login_user: root
-    login_password: ansible
+    login_password: "{{ mysql_root_password }}"
     priv: "glpi.*:ALL"
     host: "localhost"
     state: present
