@@ -1,0 +1,14 @@
+<VirtualHost *:80>
+    ServerName localhost
+    DocumentRoot /var/www/html/glpi/public
+
+    ErrorLog "/var/log/httpd/glpi_error.log"
+    CustomLog "/var/log/httpd/glpi_access.log" combined
+
+    <Directory /var/www/html/glpi/public>
+            Require all granted
+            RewriteEngine On
+            RewriteCond %{REQUEST_FILENAME} !-f
+            RewriteRule ^(.*)$ index.php [QSA,L]
+    </Directory>
+</VirtualHost>

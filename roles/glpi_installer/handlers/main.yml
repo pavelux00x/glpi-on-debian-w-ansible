@@ -4,3 +4,10 @@
   ansible.builtin.service:
     name: apache2
     state: restarted
+- name: restart httpd
+  ansible.builtin.service:
+    name: httpd
+    state: restarted
+- name: Reboot
+  ansible.builtin.command:
+    cmd: reboot

@@ -38,3 +38,26 @@ create:
 - /etc/glpi
 - /var/lib/glpi
 - /var/log/glpi
+
+packages_alma:
+- php-mbstring
+- php-mysqli
+- php-xml
+- php-cli
+- php-ldap
+- php-openssl
+- php-xmlrpc
+- php-pecl-apcu
+- php-zip
+- php-curl
+- php-gd
+- php-json
+- php-session
+- php-imap
+- httpd
+- php
+- mariadb
+- wget
+- tar
+- policycoreutils-python-utils
+- php-intl

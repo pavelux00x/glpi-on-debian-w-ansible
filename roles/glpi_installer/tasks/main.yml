@@ -1,9 +1,14 @@
 ---
 # tasks file for glpi_installer
 - ansible.builtin.include_tasks: Update-packages.yml
-  when: ansible_os_family == 'Debian' or ansible_os_family == 'Ubuntu'
+  when                         : ansible_os_family == 'Debian' or ansible_os_family == 'Ubuntu'
 - ansible.builtin.include_tasks: setup-Debian.yml
-  when: ansible_os_family == 'Debian'
+  when                         : ansible_os_family == 'Debian'
+- ansible.builtin.include_tasks: Update-packages_alma.yml
+  when                         : ansible_os_family == 'RedHat'
+- ansible.builtin.include_tasks: setup-Alma.yml 
+  when                         : ansible_os_family == 'RedHat'
+
 
 
   

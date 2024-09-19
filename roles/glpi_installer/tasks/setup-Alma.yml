@@ -1,0 +1,123 @@
+- name: Install rpms remi
+  package:
+    name: "https://rpms.remirepo.net/enterprise/remi-release-9.rpm"
+    state: present
+    disable_gpg_check: "{{ disable_dnf_gpg_check | d(omit) }}"
+
+- name: Enable php module remi
+  dnf:
+    name: "@php:remi-8.2"
+    state: present
+
+- name: Install required packages
+  dnf:
+    name: "{{ packages_alma }}"
+    state: present
+
+- name: Create .my.cnf file
+  ansible.builtin.copy:
+    content: |
+      [client]
+      user=root
+      password={{ mysql_root_password }}
+    dest: /root/.my.cnf
+    mode: '0600'
+
+- name: Set MariaDB root password
+  ansible.builtin.mysql_user:
+    name: root
+    password: "{{ mysql_root_password }}"
+    host: localhost
+    state: present
+    login_unix_socket: /var/lib/mysql/mysql.sock
+- name: Remove anonymous user
+  ansible.builtin.mysql_user:
+    name: ''
+    host_all: true
+    state: absent
+    login_unix_socket: /var/lib/mysql/mysql.sock
+
+- name: Remove test database
+  ansible.builtin.mysql_db:
+    name: test
+    state: absent
+    login_unix_socket: /var/lib/mysql/mysql.sock
+
+- name: Disallow root login remotely
+  community.mysql.mysql_user:
+    login_unix_socket: /var/lib/mysql/mysql.sock
+    name: root
+    host: localhost
+    state: present
+    password: "{{ mysql_root_password }}"
+
+- name: Reload privilege tables
+  ansible.builtin.mysql_query:
+    query: "FLUSH PRIVILEGES;"
+    login_unix_socket: /var/lib/mysql/mysql.sock
+
+- name: Create GLPI user
+  community.mysql.mysql_user:
+    name: "glpi_user"
+    password: "P@ssword132"
+    login_host: "localhost"
+    login_unix_socket: /var/lib/mysql/mysql.sock
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    priv: "glpi.*:ALL"
+    host: "localhost"
+    state: present
+
+- name: Create GLPI database
+  community.mysql.mysql_db:
+    name: glpi
+    state: present
+    login_user: root
+    login_password: levap
+    login_unix_socket: /var/lib/mysql/mysql.sock
+
+- name: Download GLPI
+  get_url:
+    url: "https://github.com/glpi-project/glpi/releases/download/10.0.16/glpi-10.0.16.tgz"
+    dest: "/var/www/html/"
+    mode: '0644'
+- name: Unarchive GLPI
+  ansible.builtin.unarchive:
+    src: "/var/www/html/glpi-10.0.16.tgz"
+    dest: "/var/www/html/"
+    remote_src: yes
+- name: Set permissions
+  ansible.builtin.file:
+    path: "/var/www/html/glpi"
+    owner: apache
+    group: apache
+    recurse: yes
+- name: Set permission other
+  ansible.builtin.file:
+    path: "/var/www/html/glpi"
+    mode: '0755'
+    recurse: yes
+- name: Template jinja virtual host
+  ansible.builtin.template:
+    src: "glpi.conf_alma.j2"
+    dest: "/etc/httpd/conf.d/glpi.conf"
+    mode: '0644'
+- name: Install policy
+  ansible.builtin.yum:
+    name: policycoreutils-python-utils
+    state: present
+- name: Restore SELinux context
+  ansible.builtin.command:
+    cmd: "restorecon -Rv /var/www/html/glpi"
+  notify: restart httpd
+
+- name: Ensure session.cookie_httponly is set to "on"
+  ansible.builtin.lineinfile:
+    path: /etc/php.ini
+    regexp: '^session.cookie_httponly ='
+    line: 'session.cookie_httponly = on'
+  notify:
+  - restart httpd
+  - Reboot
+
+
